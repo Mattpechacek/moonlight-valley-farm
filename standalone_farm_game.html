@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moonlight Valley Farm</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const GRID_SIZE = 8;
+        const TILE_SIZE = 60;
+
+        const CROPS = {
+            turnip: { name: 'Turnip', days: 4, value: 60, icon: '🥕', color: '#ff9f5e' },
+            corn: { name: 'Corn', days: 7, value: 120, icon: '🌽', color: '#ffd93d' },
+            tomato: { name: 'Tomato', days: 5, value: 80, icon: '🍅', color: '#ff6b6b' },
+            pumpkin: { name: 'Pumpkin', days: 10, value: 200, icon: '🎃', color: '#ff9500' }
+        };
+
+        // Lucide icons as SVG components
+        const Sparkles = () => (
+            <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+            </svg>
+        );
+
+        const Sun = () => (
+            <svg className="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+        );
+
+        const Cloud = () => (
+            <svg className="w-6 h-6 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+            </svg>
+        );
+
+        const Moon = () => (
+            <svg className="w-6 h-6 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+        );
+
+        const Star = () => (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+        );
+
+        const MoonlightValleyFarm = () => {
+            const [gold, setGold] = useState(500);
+            const [energy, setEnergy] = useState(100);
+            const [day, setDay] = useState(1);
+            const [season, setSeason] = useState('Spring');
+            const [time, setTime] = useState('morning');
+            const [selectedTool, setSelectedTool] = useState('hoe');
+            const [selectedSeed, setSelectedSeed] = useState('turnip');
+            const [inventory, setInventory] = useState({
+                turnip: 5,
+                corn: 3,
+                tomato: 3,
+                pumpkin: 1
+            });
+            const [grid, setGrid] = useState(() => 
+                Array(GRID_SIZE).fill(null).map(() => 
+                    Array(GRID_SIZE).fill(null).map(() => ({
+                        tilled: false,
+                        watered: false,
+                        crop: null,
+                        daysGrown: 0
+                    }))
+                )
+            );
+            const [message, setMessage] = useState('Welcome to Moonlight Valley! 🌙');
+
+            const showMessage = (msg) => {
+                setMessage(msg);
+                setTimeout(() => setMessage(''), 3000);
+            };
+
+            const handleTileClick = (row, col) => {
+                if (energy <= 0) {
+                    showMessage('Too tired! Rest to restore energy ⚡');
+                    return;
+                }
+
+                const tile = grid[row][col];
+                const newGrid = [...grid];
+
+                if (selectedTool === 'hoe' && !tile.tilled) {
+                    newGrid[row][col] = { ...tile, tilled: true };
+                    setEnergy(e => e - 2);
+                    showMessage('Tilled the soil 🌱');
+                } else if (selectedTool === 'water' && tile.tilled && !tile.watered && tile.crop) {
+                    newGrid[row][col] = { ...tile, watered: true };
+                    setEnergy(e => e - 2);
+                    showMessage('Watered the crop 💧');
+                } else if (selectedTool === 'seed' && tile.tilled && !tile.crop) {
+                    if (inventory[selectedSeed] > 0) {
+                        newGrid[row][col] = { ...tile, crop: selectedSeed, daysGrown: 0, watered: false };
+                        setInventory(inv => ({ ...inv, [selectedSeed]: inv[selectedSeed] - 1 }));
+                        setEnergy(e => e - 2);
+                        showMessage(`Planted ${CROPS[selectedSeed].name}! ✨`);
+                    } else {
+                        showMessage('No seeds left! Buy more 🛒');
+                    }
+                } else if (selectedTool === 'harvest' && tile.crop) {
+                    const crop = CROPS[tile.crop];
+                    if (tile.daysGrown >= crop.days) {
+                        setGold(g => g + crop.value);
+                        newGrid[row][col] = { tilled: true, watered: false, crop: null, daysGrown: 0 };
+                        setEnergy(e => e - 2);
+                        showMessage(`Harvested ${crop.name}! +${crop.value}G 🌟`);
+                    } else {
+                        showMessage(`Not ready yet! ${crop.days - tile.daysGrown} days left 📅`);
+                    }
+                }
+
+                setGrid(newGrid);
+            };
+
+            const advanceDay = () => {
+                setDay(d => d + 1);
+                setEnergy(100);
+                setTime('morning');
+                
+                const newGrid = grid.map(row => 
+                    row.map(tile => {
+                        if (tile.crop && tile.watered) {
+                            return { ...tile, daysGrown: tile.daysGrown + 1, watered: false };
+                        }
+                        return { ...tile, watered: false };
+                    })
+                );
+                setGrid(newGrid);
+                
+                if (day % 30 === 0) {
+                    const seasons = ['Spring', 'Summer', 'Fall', 'Winter'];
+                    setSeason(seasons[(seasons.indexOf(season) + 1) % 4]);
+                }
+                
+                showMessage('A new day dawns! ☀️');
+            };
+
+            const buySeed = (type) => {
+                const cost = CROPS[type].value / 2;
+                if (gold >= cost) {
+                    setGold(g => g - cost);
+                    setInventory(inv => ({ ...inv, [type]: inv[type] + 5 }));
+                    showMessage(`Bought 5 ${CROPS[type].name} seeds! 🌱`);
+                } else {
+                    showMessage('Not enough gold! 💰');
+                }
+            };
+
+            const getSeasonColor = () => {
+                const colors = {
+                    Spring: 'from-pink-400 to-green-400',
+                    Summer: 'from-yellow-400 to-orange-400',
+                    Fall: 'from-orange-500 to-red-500',
+                    Winter: 'from-blue-300 to-purple-400'
+                };
+                return colors[season];
+            };
+
+            const getTimeIcon = () => {
+                if (time === 'morning') return <Sun />;
+                if (time === 'afternoon') return <Cloud />;
+                return <Moon />;
+            };
+
+            return (
+                <div className={`min-h-screen bg-gradient-to-br ${getSeasonColor()} p-4`}>
+                    <div className="max-w-6xl mx-auto">
+                        {/* Header */}
+                        <div className="bg-white/90 backdrop-blur rounded-2xl p-6 mb-4 shadow-2xl border-4 border-amber-200">
+                            <div className="flex justify-between items-center mb-4">
+                                <div className="flex items-center gap-3">
+                                    <Sparkles />
+                                    <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                                        Moonlight Valley
+                                    </h1>
+                                </div>
+                                {getTimeIcon()}
+                            </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-gradient-to-br from-yellow-100 to-yellow-200 p-3 rounded-xl border-2 border-yellow-400">
+                                    <div className="text-sm font-semibold text-yellow-800">Gold</div>
+                                    <div className="text-2xl font-bold text-yellow-600">{gold}G 💰</div>
+                                </div>
+                                <div className="bg-gradient-to-br from-green-100 to-green-200 p-3 rounded-xl border-2 border-green-400">
+                                    <div className="text-sm font-semibold text-green-800">Energy</div>
+                                    <div className="text-2xl font-bold text-green-600">{energy}/100 ⚡</div>
+                                </div>
+                                <div className="bg-gradient-to-br from-blue-100 to-blue-200 p-3 rounded-xl border-2 border-blue-400">
+                                    <div className="text-sm font-semibold text-blue-800">Day</div>
+                                    <div className="text-2xl font-bold text-blue-600">{day} 📅</div>
+                                </div>
+                                <div className="bg-gradient-to-br from-purple-100 to-purple-200 p-3 rounded-xl border-2 border-purple-400">
+                                    <div className="text-sm font-semibold text-purple-800">Season</div>
+                                    <div className="text-2xl font-bold text-purple-600">{season} 🌸</div>
+                                </div>
+                            </div>
+
+                            {message && (
+                                <div className="mt-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white p-3 rounded-xl text-center font-semibold animate-pulse shadow-lg">
+                                    {message}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="grid md:grid-cols-4 gap-4">
+                            {/* Tools & Seeds */}
+                            <div className="space-y-4">
+                                <div className="bg-white/90 backdrop-blur rounded-2xl p-4 shadow-xl border-4 border-green-200">
+                                    <h3 className="text-xl font-bold text-green-700 mb-3 flex items-center gap-2">
+                                        <Star /> Tools
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {[
+                                            { id: 'hoe', label: 'Hoe 🔨', desc: 'Till soil' },
+                                            { id: 'water', label: 'Water 💧', desc: 'Water crops' },
+                                            { id: 'seed', label: 'Plant 🌱', desc: 'Plant seeds' },
+                                            { id: 'harvest', label: 'Harvest ✨', desc: 'Collect crops' }
+                                        ].map(tool => (
+                                            <button
+                                                key={tool.id}
+                                                onClick={() => setSelectedTool(tool.id)}
+                                                className={`w-full p-3 rounded-xl font-semibold transition-all ${
+                                                    selectedTool === tool.id
+                                                        ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg scale-105'
+                                                        : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                                }`}
+                                            >
+                                                <div>{tool.label}</div>
+                                                <div className="text-xs opacity-75">{tool.desc}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="bg-white/90 backdrop-blur rounded-2xl p-4 shadow-xl border-4 border-amber-200">
+                                    <h3 className="text-xl font-bold text-amber-700 mb-3">Seeds 🌾</h3>
+                                    <div className="space-y-2">
+                                        {Object.entries(CROPS).map(([key, crop]) => (
+                                            <div key={key}>
+                                                <button
+                                                    onClick={() => setSelectedSeed(key)}
+                                                    className={`w-full p-2 rounded-lg font-semibold transition-all ${
+                                                        selectedSeed === key
+                                                            ? 'bg-gradient-to-r from-amber-400 to-orange-400 text-white shadow-lg'
+                                                            : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                                    }`}
+                                                >
+                                                    {crop.icon} {crop.name} ({inventory[key]})
+                                                </button>
+                                                <button
+                                                    onClick={() => buySeed(key)}
+                                                    className="w-full mt-1 p-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 font-semibold"
+                                                >
+                                                    Buy 5 for {crop.value / 2}G
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={advanceDay}
+                                    className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white p-4 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all hover:scale-105"
+                                >
+                                    🛌 Sleep (Next Day)
+                                </button>
+                            </div>
+
+                            {/* Farm Grid */}
+                            <div className="md:col-span-3">
+                                <div className="bg-white/90 backdrop-blur rounded-2xl p-6 shadow-xl border-4 border-emerald-300">
+                                    <h3 className="text-2xl font-bold text-emerald-700 mb-4 text-center">Your Farm ✨</h3>
+                                    <div 
+                                        className="grid gap-1 mx-auto"
+                                        style={{ 
+                                            gridTemplateColumns: `repeat(${GRID_SIZE}, ${TILE_SIZE}px)`,
+                                            width: 'fit-content'
+                                        }}
+                                    >
+                                        {grid.map((row, ri) => 
+                                            row.map((tile, ci) => {
+                                                const crop = tile.crop ? CROPS[tile.crop] : null;
+                                                const isReady = crop && tile.daysGrown >= crop.days;
+                                                const growthProgress = crop ? (tile.daysGrown / crop.days) * 100 : 0;
+                                                
+                                                return (
+                                                    <button
+                                                        key={`${ri}-${ci}`}
+                                                        onClick={() => handleTileClick(ri, ci)}
+                                                        className={`relative transition-all hover:scale-110 rounded-lg border-2 ${
+                                                            tile.tilled 
+                                                                ? 'bg-gradient-to-br from-amber-700 to-amber-900 border-amber-600' 
+                                                                : 'bg-gradient-to-br from-green-600 to-green-800 border-green-700'
+                                                        } ${isReady ? 'animate-pulse' : ''}`}
+                                                        style={{ width: TILE_SIZE, height: TILE_SIZE }}
+                                                    >
+                                                        {tile.watered && (
+                                                            <div className="absolute inset-0 bg-blue-400/30 rounded-lg"></div>
+                                                        )}
+                                                        {crop && (
+                                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                                <div className="text-center">
+                                                                    <div className="text-3xl drop-shadow-lg">{crop.icon}</div>
+                                                                    {!isReady && (
+                                                                        <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-1">
+                                                                            <div 
+                                                                                className="h-full bg-green-400 rounded-full transition-all"
+                                                                                style={{ width: `${growthProgress}%` }}
+                                                                            ></div>
+                                                                        </div>
+                                                                    )}
+                                                                    {isReady && (
+                                                                        <div className="text-xs font-bold text-yellow-300 drop-shadow">READY!</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<MoonlightValleyFarm />, document.getElementById('root'));
+    </script>
+</body>
+</html>
